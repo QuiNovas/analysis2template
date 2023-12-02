@@ -34,11 +34,11 @@ analysis2template --n "My Analysis" > template.tf
 ```
 
 ## Post-processing
-The Terraform that is generated will be ugly. Format it using:
-```bash
-terraform fmt template.tf
-```
+1. The Terraform that is generated will be ugly. Format it using:
+    ```bash
+    terraform fmt template.tf
+    ```
 
-The you will need to replace the name of the `aws_quicksight_template` resource and the fields `template_id` and `name` within the resource.
+2. Replace the name of the `aws_quicksight_template` resource and the fields `template_id` and `name` within the resource.
 
-Include the new `template.tf` in your module and start creating Quicksight analysis or dashboards from it!
+3. Include the new `template.tf` in your module and start creating Quicksight analysis or dashboards from it!
