@@ -1,18 +1,22 @@
-from argh import arg, dispatch_command, wrap_errors, CommandError
-from termcolor import colored
+import re
+from collections.abc import Iterable, Mapping
+from logging import ERROR, getLogger
+from numbers import Number
+from string import Template
+from time import sleep
+from typing import TYPE_CHECKING, Any
+from uuid import uuid4
+
+from argh import CommandError, arg, dispatch_command, wrap_errors
 from boto3 import client
 from boto3.compat import filter_python_deprecation_warnings
-from logging import getLogger, ERROR
-import json
-from typing import TYPE_CHECKING
-from time import sleep
-from uuid import uuid4
+from termcolor import colored
 
 if TYPE_CHECKING:
     from mypy_boto3_quicksight.type_defs import (
-        TemplateSourceEntityTypeDef,
-        TemplateSourceAnalysisTypeDef,
         DataSetReferenceTypeDef,
+        TemplateSourceAnalysisTypeDef,
+        TemplateSourceEntityTypeDef,
     )
 else:
     DataSetReferenceTypeDef = dict
@@ -20,13 +24,72 @@ else:
     TemplateSourceEntityTypeDef = dict
 
 
-
 filter_python_deprecation_warnings()
 
-getLogger('boto3').setLevel(ERROR)
+getLogger("boto3").setLevel(ERROR)
 
-def main():
-    dispatch_command(analysis2template)
+AWS_QUICKSIGHT_TEMPLATE = Template(
+    """
+resource "aws_quicksight_template" "example" {
+  template_id = "example_id"
+  name = "example_name"
+  version_description = "Initial version"
+  $definition
+}
+"""
+)
+CAMEL_TO_SNAKE = re.compile(r"(?<!^)(?=[A-Z])")
+
+
+def escape_strings(s: str) -> str:
+    if "\n" in s:
+        return f"<<EOT\n{s}\nEOT"
+    if '"' in s:
+        s = s.replace('"', '\\"')
+    return f'"{s}"'
+
+
+def to_terraform(key: str, value: Any) -> str:
+    if not value:
+        return ""
+    if isinstance(value, Mapping):
+        return (
+            f'{CAMEL_TO_SNAKE.sub("_", key).lower()} {{\n'
+            + "\n".join([to_terraform(k, v) for k, v in value.items()])
+            + "\n}"
+        )
+    if isinstance(value, Iterable) and not isinstance(value, str):
+        value = list(value)
+        if isinstance(value[0], Mapping):
+            return "\n".join([to_terraform(key, v) for v in value])
+        if isinstance(value[0], str):
+            return (
+                f'{CAMEL_TO_SNAKE.sub("_", key).lower()} = ['
+                + ",".join([f"{escape_strings(v)}" for v in value])
+                + "]"
+            )
+        if isinstance(value[0], bool):
+            return (
+                f'{CAMEL_TO_SNAKE.sub("_", key).lower()} = ['
+                + ",".join(["true" if v else "false" for v in value])
+                + "]"
+            )
+        if isinstance(value[0], Number):
+            return (
+                f'{CAMEL_TO_SNAKE.sub("_", key).lower()} = ['
+                + ",".join([v for v in value])
+                + "]"
+            )
+        raise ValueError(f"Unknown type {type(value[0])} for {key}")
+    if isinstance(value, str):
+        return f'{CAMEL_TO_SNAKE.sub("_", key).lower()} = {escape_strings(value)}'
+    if isinstance(value, bool):
+        return (
+            f'{CAMEL_TO_SNAKE.sub("_", key).lower()} = {"true" if value else "false"}'
+        )
+    if isinstance(value, Number):
+        return f'{CAMEL_TO_SNAKE.sub("_", key).lower()} = {value}'
+    raise ValueError(f"Unknown type {type(value)} for {key}")
 
 
 @wrap_errors(processor=lambda err: colored(str(err), "red"))
@@ -99,7 +162,9 @@ def analysis2template(
                 template = quicksight.describe_template_definition(
                     AwsAccountId=aws_account_id, TemplateId=template_id
                 )
-                yield json.dumps(template, indent=2)
+                return AWS_QUICKSIGHT_TEMPLATE.substitute(
+                    definition=to_terraform("Definition", template["Definition"])
+                )
             finally:
                 quicksight.delete_template(
                     AwsAccountId=aws_account_id, TemplateId=template_id
@@ -108,3 +173,6 @@ def analysis2template(
     except Exception as error:
         raise CommandError(error)
 
+
+def main():
+    dispatch_command(analysis2template)
