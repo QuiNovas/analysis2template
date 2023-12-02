@@ -13,3 +13,32 @@ using Terraform.
 analysis to be deleted after the template creation.
 
 > Note - this is built and distributed for Python 3.7 in order to be able to run in AWS CloudShell.
+
+## Installation
+```bash
+pip install analysis2template
+```
+
+## Usage
+You can convert a QuickSight analysis to a QuickSight template using either the
+analysis ID or the analysis name (the latter is easier).
+
+### By ID
+```bash
+analysis2template --i my_analysis_id > template.tf
+```
+
+### By Name
+```bash
+analysis2template --n "My Analysis" > template.tf
+```
+
+## Post-processing
+The Terraform that is generated will be ugly. Format it using:
+```bash
+terraform fmt template.tf
+```
+
+The you will need to replace the name of the `aws_quicksight_template` resource and the fields `template_id` and `name` within the resource.
+
+Include the new `template.tf` in your module and start creating Quicksight analysis or dashboards from it!
