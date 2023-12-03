@@ -12,7 +12,9 @@ using Terraform.
 > Note - it is intended, although not required, that the initial analysis that the tempalte is created from be a "scratch"
 analysis to be deleted after the template creation.
 
-> Note - this is built and distributed for Python 3.7 in order to be able to run in AWS CloudShell.
+> Note - this is built and distributed for Python 3.7 in order to be able to run in AWS CloudShell. If you choose to run
+locally, you will need to ensure that you have your AWS administrator credentials loaded into your shell environment 
+(e.g. - awsvault).
 
 ## Installation
 ```bash
