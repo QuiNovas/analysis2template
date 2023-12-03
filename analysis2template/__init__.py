@@ -39,22 +39,33 @@ resource "aws_quicksight_template" "example" {
 """
 )
 CAMEL_TO_SNAKE = re.compile(r"(?<!^)(?=[A-Z])")
+KEY_MAP = dict(
+    DataSetConfigurations="data_set_configuration",
+    FieldBasedTooltip="field_base_tooltip",
+    ParameterDeclarations="parameters_declarations",
+)
+CONVERT_KEY = lambda key: KEY_MAP.get(key, None) or CAMEL_TO_SNAKE.sub("_", key).lower()
 
 
 def escape_strings(s: str) -> str:
     if "\n" in s:
-        return f"<<EOT\n{s}\nEOT"
-    if '"' in s:
-        s = s.replace('"', '\\"')
-    return f'"{s}"'
-
+        if "$" in s:
+            s = s.replace("$", '${"$"}')
+        s = f"<<EOT\n{s}\nEOT"
+    else:
+        if '"' in s:
+            s = s.replace('"', '\\"')
+        if "$" in s:
+            s = s.replace("$", '${"$"}')
+        s = f'"{s}"'
+    return s
 
 def to_terraform(key: str, value: Any) -> str:
     if not value:
         return ""
     if isinstance(value, Mapping):
         return (
-            f'{CAMEL_TO_SNAKE.sub("_", key).lower()} {{\n'
+            f"{CONVERT_KEY(key)} {{\n"
             + "\n".join([to_terraform(k, v) for k, v in value.items()])
             + "\n}"
         )
@@ -64,31 +75,25 @@ def to_terraform(key: str, value: Any) -> str:
             return "\n".join([to_terraform(key, v) for v in value])
         if isinstance(value[0], str):
             return (
-                f'{CAMEL_TO_SNAKE.sub("_", key).lower()} = ['
+                f"{CONVERT_KEY(key)} = ["
                 + ",".join([f"{escape_strings(v)}" for v in value])
                 + "]"
             )
         if isinstance(value[0], bool):
             return (
-                f'{CAMEL_TO_SNAKE.sub("_", key).lower()} = ['
+                f"{CONVERT_KEY(key)} = ["
                 + ",".join(["true" if v else "false" for v in value])
                 + "]"
             )
         if isinstance(value[0], Number):
-            return (
-                f'{CAMEL_TO_SNAKE.sub("_", key).lower()} = ['
-                + ",".join([v for v in value])
-                + "]"
-            )
+            return f"{CONVERT_KEY(key)} = [" + ",".join([v for v in value]) + "]"
         raise ValueError(f"Unknown type {type(value[0])} for {key}")
     if isinstance(value, str):
-        return f'{CAMEL_TO_SNAKE.sub("_", key).lower()} = {escape_strings(value)}'
+        return f"{CONVERT_KEY(key)} = {escape_strings(value)}"
     if isinstance(value, bool):
-        return (
-            f'{CAMEL_TO_SNAKE.sub("_", key).lower()} = {"true" if value else "false"}'
-        )
+        return f'{CONVERT_KEY(key)} = {"true" if value else "false"}'
     if isinstance(value, Number):
-        return f'{CAMEL_TO_SNAKE.sub("_", key).lower()} = {value}'
+        return f"{CONVERT_KEY(key)} = {value}"
     raise ValueError(f"Unknown type {type(value)} for {key}")
 
 
