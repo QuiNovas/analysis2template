@@ -38,3 +38,29 @@ has drifted from the AWS API for QuickSight templates. Therefore, the only way t
 `analysis2template` is to use the AWS API/CLI directly.
 
 A bash script that may be used in an [`external`](https://registry.terraform.io/providers/hashicorp/external/latest/docs/data-sources/external) data source is provided in [`create_template.sh`](https://github.com/QuiNovas/analysis2template/blob/main/create_template.sh)
+
+### Example
+```hcl
+data "external" "example" {
+  program = ["bash", "${path.module}/create_template.sh"]
+
+  query = {
+    template_id     = "my-template"
+    definition_path = "${path.module}/my-template-definition.json"
+  }
+}
+```
+
+Where:
+- `template_id` is the unique template-id for the template that you will be creating.
+- `definition_path` is the path to the output from `analysis2template` for this template.
+
+This data source will output a `result` that is a map of string values in the following format:
+```json
+{
+  "Arn": "arn:aws:quicksight:us-east-1:0123456789:template/my-template",
+  "TemplateId": "my-template",
+  "LastUpdatedTime": "2023-12-04T23:53:29.502000+00:00",
+  "CreatedTime": "2023-12-04T21:44:15.705000+00:00"
+}
+```

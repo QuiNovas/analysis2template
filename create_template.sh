@@ -48,8 +48,8 @@ while :; do
 done
 
 if [[ "$status" =~ .*_SUCCESSFUL ]]; then
-    echo "$template"
+    echo "$template" | jq 'del(.Version)'
 else
-    echo "$template" | jq .Version.Errors
+    echo "$template" | jq .Version.Errors 1>&2
     exit 1
 fi
