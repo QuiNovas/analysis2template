@@ -1,10 +1,7 @@
-import re
-from collections.abc import Iterable, Mapping
+import json
 from logging import ERROR, getLogger
-from numbers import Number
-from string import Template
 from time import sleep
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from argh import CommandError, arg, dispatch_command, wrap_errors
@@ -27,74 +24,6 @@ else:
 filter_python_deprecation_warnings()
 
 getLogger("boto3").setLevel(ERROR)
-
-AWS_QUICKSIGHT_TEMPLATE = Template(
-    """
-resource "aws_quicksight_template" "example" {
-  template_id = "example_id"
-  name = "example_name"
-  version_description = "Initial version"
-  $definition
-}
-"""
-)
-CAMEL_TO_SNAKE = re.compile(r"(?<!^)(?=[A-Z])")
-KEY_MAP = dict(
-    DataSetConfigurations="data_set_configuration",
-    FieldBasedTooltip="field_base_tooltip",
-    ParameterDeclarations="parameters_declarations",
-)
-CONVERT_KEY = lambda key: KEY_MAP.get(key, None) or CAMEL_TO_SNAKE.sub("_", key).lower()
-
-
-def escape_strings(s: str) -> str:
-    if "\n" in s:
-        if "$" in s:
-            s = s.replace("$", '${"$"}')
-        s = f"<<EOT\n{s}\nEOT"
-    else:
-        if '"' in s:
-            s = s.replace('"', '\\"')
-        if "$" in s:
-            s = s.replace("$", '${"$"}')
-        s = f'"{s}"'
-    return s
-
-def to_terraform(key: str, value: Any) -> str:
-    if not value:
-        return ""
-    if isinstance(value, Mapping):
-        return (
-            f"{CONVERT_KEY(key)} {{\n"
-            + "\n".join([to_terraform(k, v) for k, v in value.items()])
-            + "\n}"
-        )
-    if isinstance(value, Iterable) and not isinstance(value, str):
-        value = list(value)
-        if isinstance(value[0], Mapping):
-            return "\n".join([to_terraform(key, v) for v in value])
-        if isinstance(value[0], str):
-            return (
-                f"{CONVERT_KEY(key)} = ["
-                + ",".join([f"{escape_strings(v)}" for v in value])
-                + "]"
-            )
-        if isinstance(value[0], bool):
-            return (
-                f"{CONVERT_KEY(key)} = ["
-                + ",".join(["true" if v else "false" for v in value])
-                + "]"
-            )
-        if isinstance(value[0], Number):
-            return f"{CONVERT_KEY(key)} = [" + ",".join([v for v in value]) + "]"
-        raise ValueError(f"Unknown type {type(value[0])} for {key}")
-    if isinstance(value, str):
-        return f"{CONVERT_KEY(key)} = {escape_strings(value)}"
-    if isinstance(value, bool):
-        return f'{CONVERT_KEY(key)} = {"true" if value else "false"}'
-    if isinstance(value, Number):
-        return f"{CONVERT_KEY(key)} = {value}"
-    raise ValueError(f"Unknown type {type(value)} for {key}")
 
 
 @wrap_errors(processor=lambda err: colored(str(err), "red"))
@@ -167,9 +96,7 @@ def analysis2template(
                 template = quicksight.describe_template_definition(
                     AwsAccountId=aws_account_id, TemplateId=template_id
                 )
-                return AWS_QUICKSIGHT_TEMPLATE.substitute(
-                    definition=to_terraform("Definition", template["Definition"])
-                )
+                return json.dumps(template["Definition"], separators=(",", ":"))
             finally:
                 quicksight.delete_template(
                     AwsAccountId=aws_account_id, TemplateId=template_id
