@@ -13,36 +13,43 @@ template_json="$2"
 # Get the AWS account ID
 account_id=$(aws sts get-caller-identity --query "Account" --output text)
 
+if [ $? -ne 0 ]; then exit $?; fi
+
 # Check if the template already exists
-aws quicksight describe-template --aws-account-id "$account_id" --template-id "$template_id" 2>/dev/null
+aws quicksight describe-template --aws-account-id "$account_id" --template-id "$template_id" &>/dev/null
 
 if [ $? -eq 0 ]; then
     # Template exists, update it
-    echo "Template already exists. Updating..."
     aws quicksight update-template \
         --aws-account-id "$account_id" \
         --template-id "$template_id" \
-        --definition "$template_json"
+        --definition "$template_json" 1>/dev/null
 else
     # Template doesn't exist, create it
-    echo "Template does not exist. Creating..."
     aws quicksight create-template \
         --aws-account-id "$account_id" \
         --template-id "$template_id" \
-        --definition "$template_json"
+        --definition "$template_json" 1>/dev/null
 fi
 
+if [ $? -ne 0 ]; then exit $?; fi
+
 while :; do
-    template=$(aws quicksight describe-template --aws-account-id "$account_id" --template-id "$template_id")
-    status=$(echo "$template" | jq .Template.Version.Status)
-    if [ "$status" = "CREATION_SUCCESSFUL" || "$status" = "UPDATE_SUCCESSFUL" ]; then
+    response=$(aws quicksight describe-template --aws-account-id "$account_id" --template-id "$template_id")
+    if [ $? -ne 0 ]; then exit $?; fi
+    template=$(echo "$response" | jq .Template)
+    if [ $? -ne 0 ]; then exit $?; fi
+    status=$(echo "$template" | jq .Version.Status)
+    if [ $? -ne 0 ]; then exit $?; fi
+    
+    if [[ "$status" =~ .*_SUCCESSFUL ]]; then
+	    echo "$template"
         break
-    elif [ "$status" = "CREATION_IN_PROGRESS" || "$status" = "UPDATE_IN_PROGRESS" ]; then
-        sleep 1
+    elif [[ "$status" =~ .*_IN_PROGRESS ]]; then
+	    sleep 1
         continue
     else
-        echo "$template" | jq .Template.Version.Errors
+        echo "$template" | jq .Version.Errors
         exit 1
+    fi
 done
-
-echo "$template" | jq .Template
