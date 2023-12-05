@@ -37,7 +37,7 @@ a QuickSight template from a JSON definiton. Unfortunately, the schema for the `
 has drifted from the AWS API for QuickSight templates. Therefore, the only way to use the output of
 `analysis2template` is to use the AWS API/CLI directly.
 
-A bash script that may be used in an [`external`](https://registry.terraform.io/providers/hashicorp/external/latest/docs/data-sources/external) data source is provided in [`create_template.sh`](https://github.com/QuiNovas/analysis2template/blob/main/create_template.sh)
+A bash script that may be used in an [`external`](https://registry.terraform.io/providers/hashicorp/external/latest/docs/data-sources/external) data source is provided in [`create-template.sh`](https://github.com/QuiNovas/analysis2template/blob/main/create-template.sh)
 
 ### Example
 ```hcl
